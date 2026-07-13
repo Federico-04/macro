@@ -33,31 +33,51 @@
     --btn-bg:#181510;
     --btn-fg:#FFFFFF;
     --backdrop:rgba(24,18,10,.34);
+    --on-prot:#FFFFFF;
     --font-ui:'Inter',-apple-system,system-ui,sans-serif;
     --font-num:'Space Grotesk','Inter',sans-serif;
     --font-disp:'Archivo','Inter',sans-serif;
     --safe-b:env(safe-area-inset-bottom,0px);
   }
-  @media (prefers-color-scheme: dark){
-    :root{
-      --paper:#141310;
-      --card:#1D1B17;
-      --ink:#F1EDE3;
-      --ink-soft:#A69F8F;
-      --ink-faint:#6F695C;
-      --line:#2C2922;
-      --line-soft:#24211B;
-      --prot:#FF6B45;
-      --prot-soft:#3A2019;
-      --carb:#EBAF3F;
-      --carb-soft:#332A15;
-      --fat:#6FA9CF;
-      --fat-soft:#182B38;
-      --ok:#3FBF77;
-      --btn-bg:#F1EDE3;
-      --btn-fg:#141310;
-      --backdrop:rgba(0,0,0,.55);
-    }
+  :root.t-dark{
+    --paper:#141310;
+    --card:#1D1B17;
+    --ink:#F1EDE3;
+    --ink-soft:#A69F8F;
+    --ink-faint:#6F695C;
+    --line:#2C2922;
+    --line-soft:#24211B;
+    --prot:#FF6B45;
+    --prot-soft:#3A2019;
+    --carb:#EBAF3F;
+    --carb-soft:#332A15;
+    --fat:#6FA9CF;
+    --fat-soft:#182B38;
+    --ok:#3FBF77;
+    --btn-bg:#F1EDE3;
+    --btn-fg:#141310;
+    --backdrop:rgba(0,0,0,.55);
+    --on-prot:#FFFFFF;
+  }
+  :root.t-comp{
+    --paper:#0B0B0E;
+    --card:#15151A;
+    --ink:#F2F2EC;
+    --ink-soft:#9DA096;
+    --ink-faint:#5F6159;
+    --line:#26262E;
+    --line-soft:#1E1E24;
+    --prot:#C6FF2E;
+    --prot-soft:#252E10;
+    --carb:#FFB020;
+    --carb-soft:#332508;
+    --fat:#4FC3F7;
+    --fat-soft:#102B38;
+    --ok:#3CF08A;
+    --btn-bg:#C6FF2E;
+    --btn-fg:#10130A;
+    --backdrop:rgba(0,0,0,.62);
+    --on-prot:#10130A;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
@@ -150,6 +170,17 @@
   .meals{padding:0 16px}
   .meal{background:var(--card);border:1px solid var(--line);border-radius:18px;margin-bottom:12px;overflow:hidden}
   .meal-head{display:flex;align-items:center;justify-content:space-between;padding:13px 15px 11px}
+  .mh-l{display:flex;align-items:center;gap:4px;min-width:0}
+  .savecombo{font-size:17px;color:var(--ink-faint);padding:0 6px;line-height:1}
+  .savecombo:active{color:var(--prot)}
+
+  .bgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:6px}
+  .badge{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 8px 11px;text-align:center}
+  .badge .bi{font-size:26px;line-height:1.1}
+  .badge .bn{font-size:12px;font-weight:700;margin-top:7px;line-height:1.25}
+  .badge .bd{font-size:10.5px;color:var(--ink-faint);margin-top:3px;line-height:1.35}
+  .badge .bwhen{font-size:10px;color:var(--ok);margin-top:5px;font-family:var(--font-num);font-weight:600}
+  .badge.locked{opacity:.45}
   .meal-head .name{font-family:var(--font-disp);font-weight:800;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase}
   .meal-head .sub{font-family:var(--font-num);font-size:12.5px;color:var(--ink-faint);font-weight:500;font-variant-numeric:tabular-nums}
   .meal-head .sub b{color:var(--prot);font-weight:700}
@@ -198,7 +229,7 @@
   .frow .fmeta{font-size:11.5px;color:var(--ink-faint);font-family:var(--font-num);margin-top:1px}
   .frow .fmeta b{color:var(--prot);font-weight:700}
   .frow .plus{width:34px;height:34px;border-radius:10px;background:var(--prot-soft);color:var(--prot);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
-  .frow .plus:active{background:var(--prot);color:#fff}
+  .frow .plus:active{background:var(--prot);color:var(--on-prot)}
   .newfood{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:1.5px dashed var(--line);color:var(--ink-soft);font-weight:600;font-size:14px}
   .newfood:active{background:var(--line-soft)}
 
@@ -363,6 +394,7 @@ const DEF_SETTINGS = {
   proteinGoal:180,
   kcalMin:0,
   kcalMax:0,
+  theme:'auto',
   msgsOver:[
     'Tetto calorico sfondato. Domani il cardio presenta il conto 🧾',
     'Campione, il surplus era calorico, non illimitato. Chiudi la cucina 🔒',
@@ -377,7 +409,7 @@ const DEF_SETTINGS = {
   ]
 };
 
-let state = { foods:[], days:{}, settings:Object.assign({},DEF_SETTINGS), recents:[], date:todayKey() };
+let state = { foods:[], days:{}, settings:Object.assign({},DEF_SETTINGS), recents:[], combos:[], badges:{}, lastAmounts:{}, date:todayKey() };
 let foodMap = {};
 
 /* ---------- helpers ---------- */
@@ -396,7 +428,8 @@ function totalsFor(dateKey){
   MEALS.forEach(([mk])=> mealItems(mk,dateKey).forEach(it=>{ const m=macrosOf(it); t.kcal+=m.kcal;t.prot+=m.prot;t.carb+=m.carb;t.fat+=m.fat; }));
   return t;
 }
-function save(){ Store.save(KEY,{foods:state.foods,days:state.days,settings:state.settings,recents:state.recents}); }
+function snapshot(){ return {foods:state.foods,days:state.days,settings:state.settings,recents:state.recents,combos:state.combos,badges:state.badges,lastAmounts:state.lastAmounts}; }
+function save(){ Store.save(KEY, snapshot()); }
 
 /* ---------- init (con migrazione dalla v1) ---------- */
 (async function init(){
@@ -419,11 +452,16 @@ function save(){ Store.save(KEY,{foods:state.foods,days:state.days,settings:stat
     state.days = saved.days || {};
     state.settings = Object.assign({}, DEF_SETTINGS, saved.settings||{});
     state.recents = saved.recents || [];
+    state.combos = saved.combos || [];
+    state.badges = saved.badges || {};
+    state.lastAmounts = saved.lastAmounts || {};
   } else {
     state.foods = SEED_FOODS.slice();
     save();
   }
   rebuildMap();
+  applyTheme();
+  checkBadges(true);
   buildSegBar();
   bindHeader();
   render();
@@ -445,6 +483,150 @@ function buildSegBar(){
     sp.appendChild(i);
     bar.appendChild(sp);
   }
+}
+
+/* ---------- temi ---------- */
+const mqDark = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+function applyTheme(){
+  const t = state.settings.theme || 'auto';
+  const root = document.documentElement;
+  root.classList.remove('t-dark','t-comp');
+  if(t==='dark') root.classList.add('t-dark');
+  else if(t==='comp') root.classList.add('t-comp');
+  else if(t==='auto' && mqDark && mqDark.matches) root.classList.add('t-dark');
+  setTimeout(()=>{
+    const c = getComputedStyle(root).getPropertyValue('--paper').trim();
+    document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content', c));
+  },0);
+}
+if(mqDark){
+  const onMq=()=>{ if((state.settings.theme||'auto')==='auto') applyTheme(); };
+  try{ mqDark.addEventListener('change', onMq); }catch(e){ try{ mqDark.addListener(onMq); }catch(e2){} }
+}
+
+/* ---------- traguardi ---------- */
+const BADGES = [
+  {id:'b_first',   icon:'🍽️', name:'Si comincia',        desc:'Primo alimento registrato',        check:s=>s.items>=1},
+  {id:'b_log50',   icon:'📒', name:'Habitué',            desc:'50 alimenti registrati',           check:s=>s.items>=50},
+  {id:'b_log250',  icon:'🚂', name:'Macchina da log',    desc:'250 alimenti registrati',          check:s=>s.items>=250},
+  {id:'b_goal1',   icon:'🎯', name:'Centro!',            desc:'Obiettivo proteine raggiunto',     check:s=>s.goalDays>=1},
+  {id:'b_s3',      icon:'🔥', name:'In fiamme',          desc:'3 giorni di fila a obiettivo',     check:s=>s.maxStreak>=3},
+  {id:'b_s7',      icon:'⚡', name:'Settimana perfetta', desc:'7 giorni di fila a obiettivo',     check:s=>s.maxStreak>=7},
+  {id:'b_s30',     icon:'🏆', name:'Modalità bestia',    desc:'30 giorni di fila a obiettivo',    check:s=>s.maxStreak>=30},
+  {id:'b_range7',  icon:'🎚️', name:'Chirurgico',         desc:'7 giorni nel range calorico',      check:s=>s.rangeDays>=7},
+  {id:'b_foods25', icon:'🧺', name:'Dispensa piena',     desc:'25 alimenti in lista',             check:s=>s.foods>=25},
+  {id:'b_combo',   icon:'🧑‍🍳', name:'Chef',               desc:'Prima combo salvata',              check:s=>s.combos>=1},
+  {id:'b_d30',     icon:'📅', name:'Costanza',           desc:'Diario compilato in 30 giorni',    check:s=>s.distinct>=30}
+];
+
+function computeStats(){
+  const goal=state.settings.proteinGoal||0, kn=state.settings.kcalMin||0, km=state.settings.kcalMax||0;
+  let items=0, distinct=0, rangeDays=0;
+  const goalDaysArr=[];
+  Object.keys(state.days).forEach(k=>{
+    let has=false;
+    MEALS.forEach(([mk])=>{ const arr=state.days[k][mk]||[]; items+=arr.length; if(arr.length) has=true; });
+    if(!has) return;
+    distinct++;
+    const t=totalsFor(k);
+    if(goal>0 && t.prot>=goal) goalDaysArr.push(k);
+    if(km>0 && kn>0 && t.kcal>=kn && t.kcal<=km) rangeDays++;
+  });
+  goalDaysArr.sort();
+  let maxStreak=0, cur=0, prev=null;
+  goalDaysArr.forEach(k=>{ cur = (prev && shiftDate(prev,1)===k) ? cur+1 : 1; if(cur>maxStreak) maxStreak=cur; prev=k; });
+  return {items,distinct,goalDays:goalDaysArr.length,maxStreak,rangeDays,foods:state.foods.length,combos:state.combos.length};
+}
+
+function checkBadges(silent){
+  const s=computeStats();
+  const news=[];
+  BADGES.forEach(b=>{ if(!state.badges[b.id] && b.check(s)){ state.badges[b.id]=todayKey(); news.push(b); } });
+  if(news.length){
+    save();
+    if(!silent) setTimeout(()=>toast('🏅 Traguardo: '+news[0].name+'!'), 1900);
+  }
+}
+
+function openBadges(){
+  openSheet((panel,close)=>{
+    const n=Object.keys(state.badges).length;
+    const body=head(panel, 'Traguardi · '+n+'/'+BADGES.length, close);
+    const g=document.createElement('div'); g.className='bgrid';
+    BADGES.forEach(b=>{
+      const when=state.badges[b.id];
+      const d=document.createElement('div');
+      d.className='badge'+(when?'':' locked');
+      d.innerHTML=`<div class="bi">${when?b.icon:'🔒'}</div><div class="bn">${b.name}</div><div class="bd">${b.desc}</div>${when?`<div class="bwhen">${keyToDate(when).toLocaleDateString('it-IT',{day:'numeric',month:'short'})}</div>`:''}`;
+      g.appendChild(d);
+    });
+    body.appendChild(g);
+  });
+}
+
+/* ---------- combo ---------- */
+function comboTotals(c){
+  let t={kcal:0,prot:0,carb:0,fat:0};
+  c.items.forEach(it=>{ const m=macrosOf(it); t.kcal+=m.kcal;t.prot+=m.prot;t.carb+=m.carb;t.fat+=m.fat; });
+  return t;
+}
+
+function addCombo(meal, combo){
+  const goal=state.settings.proteinGoal||0, km=state.settings.kcalMax||0;
+  const before=totalsFor(state.date);
+  const d=dayData(); if(!d[meal]) d[meal]=[];
+  combo.items.forEach(it=>{ if(foodById(it.foodId)) d[meal].push({foodId:it.foodId, amount:it.amount}); });
+  save(); render();
+  const after=totalsFor(state.date);
+  if(goal>0 && before.prot<goal && after.prot>=goal) toast('Obiettivo proteine raggiunto 💪');
+  else if(km>0 && before.kcal<=km && after.kcal>km) toast(pickMsg(state.settings.msgsOver)||'Sopra il massimo di calorie');
+  else toast('Combo aggiunta ✓');
+  checkBadges();
+}
+
+function openComboSave(meal){
+  const items=mealItems(meal).map(it=>({foodId:it.foodId, amount:it.amount}));
+  if(!items.length) return;
+  openSheet((panel,close)=>{
+    const body=head(panel, 'Salva combo', close);
+    const t=comboTotals({items});
+    const list=items.map(it=>{
+      const f=foodById(it.foodId); if(!f) return '';
+      const q=f.unit==='g'?r0(it.amount)+' g':it.amount+' pz';
+      return `<div style="font-size:13.5px;padding:4px 0;text-transform:capitalize">${f.name} <span style="color:var(--ink-faint);font-family:var(--font-num)">· ${q}</span></div>`;
+    }).join('');
+    body.innerHTML=`
+      <div style="background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px 14px;margin-bottom:13px">
+        ${list}
+        <div style="border-top:1px solid var(--line-soft);margin-top:6px;padding-top:8px;font-size:12.5px;color:var(--ink-soft);font-family:var(--font-num)"><b style="color:var(--prot)">${r0(t.prot)}g P</b> · ${r0(t.carb)}C · ${r0(t.fat)}G · ${r0(t.kcal)} kcal</div>
+      </div>
+      <div class="field"><label>Nome della combo</label><input id="cbName" type="text" placeholder="es. Colazione tipo, Post workout…"></div>
+      <button class="btn-primary pressable" id="cbSave">Salva combo</button>
+    `;
+    body.querySelector('#cbSave').onclick=()=>{
+      const name=body.querySelector('#cbName').value.trim();
+      if(!name){ toast('Manca il nome'); return; }
+      state.combos.push({id:'c'+Date.now(), name, items});
+      save(); close(); toast('Combo salvata ✓'); checkBadges();
+    };
+  });
+}
+
+function openCombosManager(){
+  openSheet((panel,close)=>{
+    const body=head(panel, 'Le tue combo', close);
+    if(!state.combos.length){
+      body.innerHTML='<div class="empty" style="line-height:1.6">Nessuna combo ancora.<br>Per crearne una, riempi un pasto e tocca la ☆ accanto al suo nome.</div>';
+      return;
+    }
+    state.combos.forEach(c=>{
+      const t=comboTotals(c);
+      const row=document.createElement('div'); row.className='fm-row';
+      row.innerHTML=`<div class="fi"><div class="fn">${c.name}</div><div class="fmeta">${c.items.length} alimenti · ${r0(t.prot)}g P · ${r0(t.kcal)} kcal</div></div><button class="ed" style="color:var(--prot)">Elimina</button>`;
+      row.querySelector('.ed').onclick=()=>{ state.combos=state.combos.filter(x=>x.id!==c.id); save(); close(); openCombosManager(); toast('Combo eliminata'); };
+      body.appendChild(row);
+    });
+  });
 }
 
 /* ---------- render ---------- */
@@ -567,7 +749,8 @@ function renderMeals(){
     items.forEach(it=>{const m=macrosOf(it);sub.kcal+=m.kcal;sub.prot+=m.prot;});
     const card = document.createElement('div');
     card.className='meal';
-    let inner = `<div class="meal-head"><span class="name">${label}</span>`+
+    let inner = `<div class="meal-head"><span class="mh-l"><span class="name">${label}</span>`+
+      (items.length?`<button class="savecombo" data-meal="${mk}" aria-label="Salva come combo">☆</button>`:'')+`</span>`+
       (items.length?`<span class="sub"><b>${r0(sub.prot)} g P</b> · ${r0(sub.kcal)} kcal</span>`:'')+`</div>`;
     if(items.length){
       inner += `<div class="items">`;
@@ -587,6 +770,7 @@ function renderMeals(){
     wrap.appendChild(card);
   });
   wrap.querySelectorAll('.add-btn').forEach(b=> b.onclick=()=>openPicker(b.dataset.meal));
+  wrap.querySelectorAll('.savecombo').forEach(b=> b.onclick=(e)=>{ e.stopPropagation(); openComboSave(b.dataset.meal); });
   wrap.querySelectorAll('.item').forEach(it=> it.onclick=()=>{
     const arr=mealItems(it.dataset.meal);
     const idx=+it.dataset.idx;
@@ -661,6 +845,18 @@ function openPicker(meal){
     function draw(filter){
       recWrap.innerHTML=''; listWrap.innerHTML='';
       const q=(filter||'').trim().toLowerCase();
+      if(!q && state.combos.length){
+        const cl=document.createElement('div'); cl.className='reclabel'; cl.textContent='Le tue combo';
+        recWrap.appendChild(cl);
+        state.combos.forEach(c=>{
+          const t=comboTotals(c);
+          const row=document.createElement('div'); row.className='frow';
+          row.innerHTML=`<div class="fi"><div class="fn">${c.name}</div><div class="fmeta"><b>${r0(t.prot)}g P</b> · ${r0(t.kcal)} kcal · ${c.items.length} alimenti</div></div><button class="plus pressable">+</button>`;
+          row.querySelector('.plus').onclick=()=>{ close(); addCombo(meal, c); };
+          recWrap.appendChild(row);
+        });
+        const sp=document.createElement('div'); sp.style.height='8px'; recWrap.appendChild(sp);
+      }
       if(!q && state.recents.length){
         const rl=document.createElement('div'); rl.className='reclabel'; rl.textContent='Recenti';
         recWrap.appendChild(rl);
@@ -700,12 +896,14 @@ function openPicker(meal){
 function openQty(meal, foodId, editIdx){
   const f=foodById(foodId); if(!f) return;
   const isEdit = editIdx!==null && editIdx!==undefined;
-  let amount = isEdit ? mealItems(meal)[editIdx].amount : (f.unit==='g' ? 100 : 1);
+  const remembered = state.lastAmounts[foodId];
+  let amount = isEdit ? mealItems(meal)[editIdx].amount : (remembered || (f.unit==='g' ? 100 : 1));
   openSheet((panel,close)=>{
     const body=head(panel, isEdit?'Modifica':'Aggiungi', close);
     const unit = f.unit==='g' ? 'g' : 'pz';
     const stepv = f.unit==='g' ? 10 : 1;
-    const chips = f.unit==='g' ? [30,50,80,100,150,200] : [1,2,3];
+    let chips = f.unit==='g' ? [30,50,80,100,150,200] : [1,2,3];
+    if(remembered && !chips.includes(remembered)) chips=[remembered,...chips];
 
     body.innerHTML=`
       <div class="qt-food"><div class="qn">${f.name}</div><div class="qm">${f.prot}g proteine · ${f.kcal} kcal ${f.unit==='g'?'/ 100g':'/ pezzo'}</div></div>
@@ -726,7 +924,7 @@ function openQty(meal, foodId, editIdx){
     `;
     const amt=body.querySelector('#qAmt');
     const chipWrap=body.querySelector('#qChips');
-    chips.forEach(c=>{ const b=document.createElement('button'); b.className='pressable'; b.textContent=c+(f.unit==='g'?'':' pz'); b.onclick=()=>{amount=c;sync();}; chipWrap.appendChild(b); });
+    chips.forEach(c=>{ const b=document.createElement('button'); b.className='pressable'; b.textContent=c+(f.unit==='g'?'':' pz')+(c===remembered?' ★':''); b.onclick=()=>{amount=c;sync();}; chipWrap.appendChild(b); });
 
     function preview(){
       const k=factor(f,amount);
@@ -747,11 +945,13 @@ function openQty(meal, foodId, editIdx){
       const d=dayData(); if(!d[meal]) d[meal]=[];
       if(isEdit){ d[meal][editIdx].amount=amount; }
       else { d[meal].push({foodId, amount}); pushRecent(foodId); }
+      state.lastAmounts[foodId]=amount;
       save(); render(); close();
       const after=totalsFor(state.date);
       if(goal>0 && before.prot<goal && after.prot>=goal) toast('Obiettivo proteine raggiunto 💪');
       else if(km>0 && before.kcal<=km && after.kcal>km) toast(pickMsg(state.settings.msgsOver)||'Sopra il massimo di calorie');
       else toast(isEdit?'Aggiornato':'Aggiunto ✓');
+      checkBadges();
     };
     if(isEdit){ body.querySelector('#qDel').onclick=()=>{ const d=dayData(); d[meal].splice(editIdx,1); save(); render(); close(); toast('Rimosso'); }; }
     sync();
@@ -844,6 +1044,16 @@ function openSettings(){
           <input class="goal-input" id="sKmax" style="width:66px" type="number" inputmode="numeric" value="${state.settings.kcalMax||0}">
         </div>
       </div>
+      <div class="field" style="margin-top:14px"><label>Tema</label>
+        <div class="seg" id="sTheme">
+          <button data-t="auto">Auto</button>
+          <button data-t="light">Chiaro</button>
+          <button data-t="dark">Scuro</button>
+          <button data-t="comp">Gara</button>
+        </div>
+      </div>
+      <div class="settings-row" id="rBadges"><div class="lbl">Traguardi<small>${Object.keys(state.badges).length} di ${BADGES.length} sbloccati</small></div><span style="color:var(--ink-faint);font-size:20px">›</span></div>
+      <div class="settings-row" id="rCombos"><div class="lbl">Le tue combo<small>${state.combos.length} salvate — si creano con ☆ nei pasti</small></div><span style="color:var(--ink-faint);font-size:20px">›</span></div>
       <div class="settings-row" id="rFoods"><div class="lbl">Gestisci alimenti<small>aggiungi, modifica, elimina</small></div><span style="color:var(--ink-faint);font-size:20px">›</span></div>
       <div class="field" style="margin-top:18px"><label>Frasi del coach quando sfori il massimo (una per riga)</label><textarea id="sMsgO" rows="4">${(state.settings.msgsOver||[]).join('\n')}</textarea></div>
       <div class="field"><label>Frasi del coach quando resti sotto il minimo (una per riga)</label><textarea id="sMsgU" rows="4">${(state.settings.msgsUnder||[]).join('\n')}</textarea></div>
@@ -865,6 +1075,13 @@ function openSettings(){
     const mo=body.querySelector('#sMsgO'), mu=body.querySelector('#sMsgU');
     mo.onchange=()=>{ state.settings.msgsOver=parseMsgs(mo.value); save(); renderHero(); };
     mu.onchange=()=>{ state.settings.msgsUnder=parseMsgs(mu.value); save(); renderHero(); };
+    const themeSeg=body.querySelectorAll('#sTheme button');
+    themeSeg.forEach(b=>{
+      if(b.dataset.t===(state.settings.theme||'auto')) b.classList.add('on');
+      b.onclick=()=>{ state.settings.theme=b.dataset.t; themeSeg.forEach(x=>x.classList.remove('on')); b.classList.add('on'); save(); applyTheme(); };
+    });
+    body.querySelector('#rBadges').onclick=()=>{ close(); openBadges(); };
+    body.querySelector('#rCombos').onclick=()=>{ close(); openCombosManager(); };
     body.querySelector('#rFoods').onclick=()=>{ close(); openFoodsManager(); };
     body.querySelector('#sExport').onclick=exportData;
     const file=body.querySelector('#sFile');
@@ -873,7 +1090,8 @@ function openSettings(){
       rd.onload=()=>{ try{ const obj=JSON.parse(rd.result);
         if(obj.foods) state.foods=obj.foods; if(obj.days) state.days=obj.days;
         if(obj.settings) state.settings=Object.assign(state.settings,obj.settings); if(obj.recents) state.recents=obj.recents;
-        rebuildMap(); save(); render(); close(); toast('Dati importati');
+        if(obj.combos) state.combos=obj.combos; if(obj.badges) state.badges=obj.badges; if(obj.lastAmounts) state.lastAmounts=obj.lastAmounts;
+        rebuildMap(); applyTheme(); save(); render(); close(); toast('Dati importati');
       }catch(err){ toast('File non valido'); } };
       rd.readAsText(f);
     };
@@ -881,7 +1099,7 @@ function openSettings(){
 }
 
 function exportData(){
-  const data=JSON.stringify({foods:state.foods,days:state.days,settings:state.settings,recents:state.recents},null,2);
+  const data=JSON.stringify(snapshot(),null,2);
   const blob=new Blob([data],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -906,5 +1124,3 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-<script data-goatcounter="https://macro-federico.goatcounter.com/count"
-        async src="//gc.zgo.at/count.js"></script>
