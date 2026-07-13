@@ -1104,15 +1104,54 @@ function openScanner(onFood){
 
     async function start(){
       status.textContent='Avvio fotocamera…';
+      stopped=false;
+      const constraints={audio:false, video:{facingMode:'environment', width:{ideal:1920}, height:{ideal:1080}}};
+
+      // 1) lettore nativo del sistema (iOS/Android recenti): molto più preciso
+      let detector=null;
+      try{
+        if('BarcodeDetector' in window){
+          const fmts=await BarcodeDetector.getSupportedFormats();
+          const want=['ean_13','ean_8','upc_a','upc_e','code_128'].filter(f=>fmts.includes(f));
+          if(want.length) detector=new BarcodeDetector({formats:want});
+        }
+      }catch(e){ detector=null; }
+
+      if(detector){
+        try{
+          const stream=await navigator.mediaDevices.getUserMedia(constraints);
+          vid.srcObject=stream;
+          await vid.play();
+          status.textContent='Inquadra il codice a barre';
+          const tick=async()=>{
+            if(stopped) return;
+            try{
+              const codes=await detector.detect(vid);
+              if(codes && codes.length){ stopAll(); lookup(codes[0].rawValue); return; }
+            }catch(e){}
+            setTimeout(()=>requestAnimationFrame(tick),120);
+          };
+          requestAnimationFrame(tick);
+          return;
+        }catch(e){ /* se fallisce, si prova con ZXing qui sotto */ }
+      }
+
+      // 2) riserva: ZXing con modalità accurata e solo formati da prodotto
       try{ await loadZXing(); }
       catch(e){ fail('Impossibile caricare il lettore (sei offline?)', true); return; }
       try{
-        reader=new ZXing.BrowserMultiFormatReader();
-        stopped=false;
+        const hints=new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[
+          ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.CODE_128
+        ]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        reader=new ZXing.BrowserMultiFormatReader(hints);
         const onResult=(result)=>{ if(stopped||!result) return; stopped=true; try{reader.reset();}catch(e){} lookup(result.getText()); };
         status.textContent='Inquadra il codice a barre';
         if(reader.decodeFromConstraints){
-          await reader.decodeFromConstraints({audio:false, video:{facingMode:'environment'}}, vid, (res)=>onResult(res));
+          await reader.decodeFromConstraints(constraints, vid, (res)=>onResult(res));
         } else {
           await reader.decodeFromVideoDevice(undefined, vid, (res)=>onResult(res));
         }
