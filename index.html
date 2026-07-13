@@ -126,6 +126,11 @@
   .chipstat.c-fat .k{color:var(--fat)}
   .chipstat.c-kcal .v{color:var(--ink-soft)}
 
+  /* ---------- coach ---------- */
+  .coach{margin:12px 16px 0;padding:13px 16px;border-radius:16px;font-family:var(--font-disp);font-weight:800;font-size:14px;line-height:1.45;letter-spacing:.01em}
+  .coach.over{background:var(--prot-soft);color:var(--prot);border:1px solid var(--prot)}
+  .coach.under{background:var(--carb-soft);color:var(--carb);border:1px solid var(--carb)}
+
   /* ---------- settimana ---------- */
   .week{background:var(--card);border:1px solid var(--line);border-radius:18px;margin:12px 16px;padding:13px 15px 11px}
   .week .wt{display:flex;justify-content:space-between;align-items:baseline}
@@ -225,6 +230,8 @@
   .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:5px}
   .field input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:var(--card);outline:none}
   .field input:focus{border-color:var(--ink-soft)}
+  .field textarea{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:12px;background:var(--card);outline:none;font-size:14px;color:var(--ink);font-family:var(--font-ui);resize:vertical;line-height:1.5}
+  .field textarea:focus{border-color:var(--ink-soft)}
   .seg{display:flex;gap:8px}
   .seg button{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:13.5px;color:var(--ink-soft)}
   .seg button.on{background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg)}
@@ -281,6 +288,8 @@
       <div class="chipstat c-kcal"><span class="k">Energia</span><span class="v" id="kcalVal">0</span></div>
     </div>
   </div>
+
+  <div class="coach" id="coach" style="display:none"></div>
 
   <div class="week" id="week">
     <div class="wt"><span class="l">Ultimi 7 giorni</span><span class="avg" id="weekAvg"></span></div>
@@ -350,7 +359,25 @@ const MEALS = [
   ['spuntino3','Spuntino 3']
 ];
 
-let state = { foods:[], days:{}, settings:{proteinGoal:180}, recents:[], date:todayKey() };
+const DEF_SETTINGS = {
+  proteinGoal:180,
+  kcalMin:0,
+  kcalMax:0,
+  msgsOver:[
+    'Tetto calorico sfondato. Domani il cardio presenta il conto 🧾',
+    'Campione, il surplus era calorico, non illimitato. Chiudi la cucina 🔒',
+    'Bulk sì, bulldozer no. Posa la forchetta.',
+    'Oggi hai mangiato per due. Domani ti alleni per tre.'
+  ],
+  msgsUnder:[
+    'Sotto il minimo: i muscoli non crescono ad aria 💨',
+    'Il bilanciere non si solleva da solo. Mangia, campione.',
+    'La massa si costruisce a tavola, e oggi hai saltato il cantiere.',
+    'Niente calorie, niente PR. Domani si mangia sul serio.'
+  ]
+};
+
+let state = { foods:[], days:{}, settings:Object.assign({},DEF_SETTINGS), recents:[], date:todayKey() };
 let foodMap = {};
 
 /* ---------- helpers ---------- */
@@ -381,7 +408,7 @@ function save(){ Store.save(KEY,{foods:state.foods,days:state.days,settings:stat
       saved = {
         foods: SEED_FOODS.concat(userFoods),
         days: legacy.days||{},
-        settings: Object.assign({proteinGoal:180}, legacy.settings||{}),
+        settings: Object.assign({}, DEF_SETTINGS, legacy.settings||{}),
         recents: legacy.recents||[]
       };
       await Store.save(KEY, saved);
@@ -390,7 +417,7 @@ function save(){ Store.save(KEY,{foods:state.foods,days:state.days,settings:stat
   if(saved){
     state.foods = saved.foods && saved.foods.length ? saved.foods : SEED_FOODS.slice();
     state.days = saved.days || {};
-    state.settings = Object.assign({proteinGoal:180}, saved.settings||{});
+    state.settings = Object.assign({}, DEF_SETTINGS, saved.settings||{});
     state.recents = saved.recents || [];
   } else {
     state.foods = SEED_FOODS.slice();
@@ -470,12 +497,35 @@ function renderHero(){
   });
   document.getElementById('carbVal').textContent = r0(t.carb)+' g';
   document.getElementById('fatVal').textContent = r0(t.fat)+' g';
-  document.getElementById('kcalVal').textContent = r0(t.kcal);
+  const kEl = document.getElementById('kcalVal');
+  kEl.textContent = r0(t.kcal);
+  const km = state.settings.kcalMax||0, kn = state.settings.kcalMin||0;
+  if(km>0 && t.kcal>km) kEl.style.color='var(--prot)';
+  else if(km>0 && kn>0 && t.kcal>=kn && t.kcal<=km) kEl.style.color='var(--ok)';
+  else kEl.style.color='';
+  renderCoach(t);
   const reached = goal>0 && t.prot>=goal;
   document.getElementById('hero').classList.toggle('reached', reached);
   const mini = document.getElementById('miniBar');
   mini.classList.toggle('done', reached);
   mini.querySelector('i').style.width = Math.min(100, frac*100)+'%';
+}
+
+function pickMsg(arr){
+  if(!arr || !arr.length) return null;
+  let h=0; const s=state.date;
+  for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0;
+  return arr[Math.abs(h)%arr.length];
+}
+
+function renderCoach(t){
+  const c=document.getElementById('coach');
+  const km=state.settings.kcalMax||0, kn=state.settings.kcalMin||0;
+  let msg=null, mode='';
+  if(km>0 && t.kcal>km){ msg=pickMsg(state.settings.msgsOver); mode='over'; }
+  else if(kn>0 && t.kcal>0 && t.kcal<kn && state.date<todayKey()){ msg=pickMsg(state.settings.msgsUnder); mode='under'; }
+  if(msg){ c.textContent=msg; c.className='coach '+mode; c.style.display='block'; }
+  else c.style.display='none';
 }
 
 function renderWeek(){
@@ -692,13 +742,15 @@ function openQty(meal, foodId, editIdx){
     body.querySelector('#qConfirm').onclick=()=>{
       if(amount<=0){ close(); return; }
       const goal=state.settings.proteinGoal||0;
-      const before=totalsFor(state.date).prot;
+      const km=state.settings.kcalMax||0;
+      const before=totalsFor(state.date);
       const d=dayData(); if(!d[meal]) d[meal]=[];
       if(isEdit){ d[meal][editIdx].amount=amount; }
       else { d[meal].push({foodId, amount}); pushRecent(foodId); }
       save(); render(); close();
-      const after=totalsFor(state.date).prot;
-      if(goal>0 && before<goal && after>=goal) toast('Obiettivo proteine raggiunto 💪');
+      const after=totalsFor(state.date);
+      if(goal>0 && before.prot<goal && after.prot>=goal) toast('Obiettivo proteine raggiunto 💪');
+      else if(km>0 && before.kcal<=km && after.kcal>km) toast(pickMsg(state.settings.msgsOver)||'Sopra il massimo di calorie');
       else toast(isEdit?'Aggiornato':'Aggiunto ✓');
     };
     if(isEdit){ body.querySelector('#qDel').onclick=()=>{ const d=dayData(); d[meal].splice(editIdx,1); save(); render(); close(); toast('Rimosso'); }; }
@@ -784,7 +836,17 @@ function openSettings(){
         <div class="lbl">Obiettivo proteine<small>grammi al giorno</small></div>
         <input class="goal-input" id="sGoal" type="number" inputmode="numeric" value="${state.settings.proteinGoal}">
       </div>
+      <div class="settings-row">
+        <div class="lbl">Range calorie<small>min – max al giorno (0 = disattivato)</small></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="goal-input" id="sKmin" style="width:66px" type="number" inputmode="numeric" value="${state.settings.kcalMin||0}">
+          <span style="color:var(--ink-faint)">–</span>
+          <input class="goal-input" id="sKmax" style="width:66px" type="number" inputmode="numeric" value="${state.settings.kcalMax||0}">
+        </div>
+      </div>
       <div class="settings-row" id="rFoods"><div class="lbl">Gestisci alimenti<small>aggiungi, modifica, elimina</small></div><span style="color:var(--ink-faint);font-size:20px">›</span></div>
+      <div class="field" style="margin-top:18px"><label>Frasi del coach quando sfori il massimo (una per riga)</label><textarea id="sMsgO" rows="4">${(state.settings.msgsOver||[]).join('\n')}</textarea></div>
+      <div class="field"><label>Frasi del coach quando resti sotto il minimo (una per riga)</label><textarea id="sMsgU" rows="4">${(state.settings.msgsUnder||[]).join('\n')}</textarea></div>
       <div style="margin-top:16px">
         <button class="btn-ghost pressable" id="sExport">Esporta dati (backup)</button>
         <button class="btn-ghost pressable" id="sImport">Importa dati da file</button>
@@ -796,6 +858,13 @@ function openSettings(){
     `;
     const goal=body.querySelector('#sGoal');
     goal.onchange=()=>{ state.settings.proteinGoal=Math.max(0,parseInt(goal.value)||0); save(); renderHero(); renderWeek(); };
+    const kmin=body.querySelector('#sKmin'), kmax=body.querySelector('#sKmax');
+    kmin.onchange=()=>{ state.settings.kcalMin=Math.max(0,parseInt(kmin.value)||0); save(); renderHero(); };
+    kmax.onchange=()=>{ state.settings.kcalMax=Math.max(0,parseInt(kmax.value)||0); save(); renderHero(); };
+    const parseMsgs=(v)=>v.split('\n').map(x=>x.trim()).filter(Boolean);
+    const mo=body.querySelector('#sMsgO'), mu=body.querySelector('#sMsgU');
+    mo.onchange=()=>{ state.settings.msgsOver=parseMsgs(mo.value); save(); renderHero(); };
+    mu.onchange=()=>{ state.settings.msgsUnder=parseMsgs(mu.value); save(); renderHero(); };
     body.querySelector('#rFoods').onclick=()=>{ close(); openFoodsManager(); };
     body.querySelector('#sExport').onclick=exportData;
     const file=body.querySelector('#sFile');
