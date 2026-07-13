@@ -146,6 +146,12 @@
   .chipstat.c-fat .k{color:var(--fat)}
   .chipstat.c-kcal .v{color:var(--ink-soft)}
 
+  /* ---------- scanner ---------- */
+  .scanwrap{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:3/4;max-height:50vh}
+  .scanwrap video{width:100%;height:100%;object-fit:cover;display:block}
+  .scanline{position:absolute;left:8%;right:8%;top:50%;height:2px;background:var(--prot);opacity:.85;box-shadow:0 0 14px var(--prot);border-radius:2px}
+  .scan-status{text-align:center;font-size:13px;color:var(--ink-soft);margin:12px 0 6px;min-height:18px}
+
   /* ---------- coach ---------- */
   .coach{margin:12px 16px 0;padding:13px 16px;border-radius:16px;font-family:var(--font-disp);font-weight:800;font-size:14px;line-height:1.45;letter-spacing:.01em}
   .coach.over{background:var(--prot-soft);color:var(--prot);border:1px solid var(--prot)}
@@ -396,16 +402,16 @@ const DEF_SETTINGS = {
   kcalMax:0,
   theme:'auto',
   msgsOver:[
-    'Tetto calorico sfondato. Mangia di meno ciccione!',
-    'Lurido, il surplus era calorico, non illimitato. Chiudi quella cazzo di bocca!',
-    'Obeso di merda, fermati!',
-    'Guardati fai schifo, ciccione di merda.'
+    'Tetto calorico sfondato. Domani il cardio presenta il conto 🧾',
+    'Campione, il surplus era calorico, non illimitato. Chiudi la cucina 🔒',
+    'Bulk sì, bulldozer no. Posa la forchetta.',
+    'Oggi hai mangiato per due. Domani ti alleni per tre.'
   ],
   msgsUnder:[
-    'Skinny Bitch',
-    'Il bilanciere non si solleva da solo. Mangia, coglione.',
-    'Stop being little bitch and eat your damn meal',
-    'Secco di merda! Mangia ancora.'
+    'Sotto il minimo: i muscoli non crescono ad aria 💨',
+    'Il bilanciere non si solleva da solo. Mangia, campione.',
+    'La massa si costruisce a tavola, e oggi hai saltato il cantiere.',
+    'Niente calorie, niente PR. Domani si mangia sul serio.'
   ]
 };
 
@@ -841,6 +847,12 @@ function openPicker(meal){
       b.onclick=()=> openFoodForm(null, (nf)=>{ close(); openQty(meal, nf.id, null); });
       return b;
     }
+    function makeScanBtn(){
+      const b=document.createElement('button');
+      b.className='newfood'; b.style.marginTop='8px'; b.textContent='📷 Scansiona codice a barre';
+      b.onclick=()=>{ close(); openScanner((nf)=>{ openQty(meal, nf.id, null); }); };
+      return b;
+    }
 
     function draw(filter){
       recWrap.innerHTML=''; listWrap.innerHTML='';
@@ -873,6 +885,7 @@ function openPicker(meal){
       if(!foods.length){
         listWrap.innerHTML='<div class="empty">Nessun alimento trovato</div>';
         listWrap.appendChild(makeNewBtn());
+        listWrap.appendChild(makeScanBtn());
         return;
       }
       let curLetter='';
@@ -886,6 +899,7 @@ function openPicker(meal){
         listWrap.appendChild(row);
       });
       listWrap.appendChild(makeNewBtn());
+      listWrap.appendChild(makeScanBtn());
     }
     input.oninput=()=>draw(input.value);
     draw('');
@@ -963,12 +977,16 @@ function pushRecent(id){
 }
 
 /* ---------- form nuovo / modifica alimento ---------- */
-function openFoodForm(existing, onSaved){
+function openFoodForm(existing, onSaved, draft){
   openSheet((panel,close)=>{
     const body=head(panel, existing?'Modifica alimento':'Nuovo alimento', close);
     let unit = existing? existing.unit : 'g';
+    const src = existing || draft || {};
+    const vname = (src.name||'').replace(/"/g,'&quot;');
+    const vv = (k)=> (src[k]!==undefined && src[k]!==null && src[k]!=='') ? src[k] : '';
     body.innerHTML=`
-      <div class="field"><label>Nome</label><input id="fName" type="text" placeholder="es. Yogurt greco" value="${existing?existing.name.replace(/"/g,'&quot;'):''}"></div>
+      ${draft?'<div class="empty" style="text-align:left;padding:0 2px 12px;line-height:1.5">Dati da Open Food Facts — controlla che corrispondano all\'etichetta prima di salvare.</div>':''}
+      <div class="field"><label>Nome</label><input id="fName" type="text" placeholder="es. Yogurt greco" value="${vname}"></div>
       <div class="field"><label>Riferimento valori</label>
         <div class="seg" id="fSeg">
           <button data-u="g" class="${unit==='g'?'on':''}">per 100 g</button>
@@ -976,11 +994,11 @@ function openFoodForm(existing, onSaved){
         </div>
       </div>
       <div class="grid3">
-        <div class="field"><label>Proteine (g)</label><input id="fP" type="number" inputmode="decimal" value="${existing?existing.prot:''}"></div>
-        <div class="field"><label>Carbo (g)</label><input id="fC" type="number" inputmode="decimal" value="${existing?existing.carb:''}"></div>
-        <div class="field"><label>Grassi (g)</label><input id="fF" type="number" inputmode="decimal" value="${existing?existing.fat:''}"></div>
+        <div class="field"><label>Proteine (g)</label><input id="fP" type="number" inputmode="decimal" value="${vv('prot')}"></div>
+        <div class="field"><label>Carbo (g)</label><input id="fC" type="number" inputmode="decimal" value="${vv('carb')}"></div>
+        <div class="field"><label>Grassi (g)</label><input id="fF" type="number" inputmode="decimal" value="${vv('fat')}"></div>
       </div>
-      <div class="field"><label>Calorie (kcal)</label><input id="fK" type="number" inputmode="decimal" value="${existing?existing.kcal:''}"></div>
+      <div class="field"><label>Calorie (kcal)</label><input id="fK" type="number" inputmode="decimal" value="${vv('kcal')}"></div>
       <button class="btn-primary pressable" id="fSave">${existing?'Salva modifiche':'Aggiungi alimento'}</button>
       ${existing?'<button class="btn-danger" id="fDel">Elimina alimento</button>':''}
     `;
@@ -1008,6 +1026,104 @@ function openFoodForm(existing, onSaved){
   });
 }
 
+/* ---------- scanner barcode + Open Food Facts ---------- */
+let zxingPromise=null;
+function loadZXing(){
+  if(window.ZXing) return Promise.resolve();
+  if(zxingPromise) return zxingPromise;
+  zxingPromise=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+    s.onload=()=>res();
+    s.onerror=()=>{ zxingPromise=null; rej(new Error('load failed')); };
+    document.head.appendChild(s);
+  });
+  return zxingPromise;
+}
+
+function openScanner(onFood){
+  openSheet((panel,close)=>{
+    const body=head(panel, 'Scansiona barcode', close);
+    body.innerHTML=`
+      <div class="scanwrap"><video id="scVid" playsinline muted></video><div class="scanline"></div></div>
+      <div class="scan-status" id="scStatus">Avvio fotocamera…</div>
+      <div id="scActions"></div>
+    `;
+    const vid=body.querySelector('#scVid');
+    const status=body.querySelector('#scStatus');
+    const actions=body.querySelector('#scActions');
+    let reader=null, stopped=false;
+
+    function stopAll(){
+      stopped=true;
+      try{ if(reader) reader.reset(); }catch(e){}
+      try{ const s=vid.srcObject; if(s) s.getTracks().forEach(t=>t.stop()); }catch(e){}
+    }
+    // spegni la fotocamera anche chiudendo con "Chiudi" o toccando fuori
+    const sheet=panel.closest('.sheet');
+    const realClose=()=>{ stopAll(); close(); };
+    sheet.querySelector('.backdrop').onclick=realClose;
+    panel.querySelector('.p-close').onclick=realClose;
+
+    function fail(msg, allowRetry){
+      status.textContent=msg;
+      actions.innerHTML='';
+      if(allowRetry){
+        const r=document.createElement('button'); r.className='btn-ghost pressable'; r.textContent='Riprova';
+        r.onclick=()=>{ actions.innerHTML=''; start(); };
+        actions.appendChild(r);
+      }
+      const m=document.createElement('button'); m.className='btn-ghost pressable'; m.textContent='Inserisci a mano';
+      m.onclick=()=>{ stopAll(); close(); openFoodForm(null, onFood); };
+      actions.appendChild(m);
+    }
+
+    async function lookup(code){
+      status.textContent='Codice '+code+' — cerco il prodotto…';
+      try{
+        const r=await fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=product_name,product_name_it,brands,nutriments');
+        const j=await r.json();
+        if(j.status!==1 || !j.product){ fail('Prodotto non trovato nel database 😕', true); return; }
+        const p=j.product, n=p.nutriments||{};
+        let kcal=n['energy-kcal_100g'];
+        if(kcal==null && n['energy_100g']!=null) kcal=n['energy_100g']/4.184;
+        const round2=(x)=> (x==null || isNaN(x)) ? '' : Math.round(x*100)/100;
+        const draft={
+          name:(p.product_name_it||p.product_name||'').toLowerCase().trim(),
+          prot:round2(n['proteins_100g']),
+          carb:round2(n['carbohydrates_100g']),
+          fat:round2(n['fat_100g']),
+          kcal:round2(kcal)
+        };
+        stopAll(); close();
+        openFoodForm(null, onFood, draft);
+      }catch(e){
+        fail('Errore di rete: per la ricerca serve connessione', true);
+      }
+    }
+
+    async function start(){
+      status.textContent='Avvio fotocamera…';
+      try{ await loadZXing(); }
+      catch(e){ fail('Impossibile caricare il lettore (sei offline?)', true); return; }
+      try{
+        reader=new ZXing.BrowserMultiFormatReader();
+        stopped=false;
+        const onResult=(result)=>{ if(stopped||!result) return; stopped=true; try{reader.reset();}catch(e){} lookup(result.getText()); };
+        status.textContent='Inquadra il codice a barre';
+        if(reader.decodeFromConstraints){
+          await reader.decodeFromConstraints({audio:false, video:{facingMode:'environment'}}, vid, (res)=>onResult(res));
+        } else {
+          await reader.decodeFromVideoDevice(undefined, vid, (res)=>onResult(res));
+        }
+      }catch(e){
+        fail('Fotocamera non disponibile: controlla i permessi di Safari', false);
+      }
+    }
+    start();
+  });
+}
+
 /* ---------- gestione alimenti ---------- */
 function openFoodsManager(){
   openSheet((panel,close)=>{
@@ -1015,6 +1131,9 @@ function openFoodsManager(){
     const add=document.createElement('button'); add.className='newfood'; add.style.marginTop='4px'; add.style.marginBottom='6px';
     add.textContent='+ Nuovo alimento'; add.onclick=()=>{ close(); openFoodForm(null,()=>openFoodsManager()); };
     body.appendChild(add);
+    const scan=document.createElement('button'); scan.className='newfood'; scan.style.marginBottom='6px';
+    scan.textContent='📷 Scansiona codice a barre'; scan.onclick=()=>{ close(); openScanner(()=>openFoodsManager()); };
+    body.appendChild(scan);
     const list=document.createElement('div');
     state.foods.slice().sort((a,b)=>a.name.localeCompare(b.name,'it')).forEach(f=>{
       const row=document.createElement('div'); row.className='fm-row';

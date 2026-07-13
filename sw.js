@@ -3,7 +3,7 @@
    arrivano subito) e la cache come riserva offline; per tutto il resto
    (icone, font) usa prima la cache. */
 
-const CACHE = 'macro-v1';
+const CACHE = 'macro-v2';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', (e) => {
@@ -22,6 +22,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+
+  // Le ricerche prodotti (Open Food Facts) vanno sempre in rete, mai in cache
+  if (req.url.includes('openfoodfacts.org')) return;
 
   // Navigazione (apertura dell'app): rete prima, cache se offline
   if (req.mode === 'navigate') {
