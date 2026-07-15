@@ -402,16 +402,16 @@ const DEF_SETTINGS = {
   kcalMax:0,
   theme:'auto',
   msgsOver:[
-    'Ciccione di merda, smettila di mangiare!',
-    'Ma ti vedi allo specchio? Sei obeso, basta mangiare',
-    'Posa la forchetta coglione!',
-    'Lurido! Posa la forchetta!.'
+    'Tetto calorico sfondato. Domani il cardio presenta il conto 🧾',
+    'Campione, il surplus era calorico, non illimitato. Chiudi la cucina 🔒',
+    'Bulk sì, bulldozer no. Posa la forchetta.',
+    'Oggi hai mangiato per due. Domani ti alleni per tre.'
   ],
   msgsUnder:[
-    'Secco di merda! Mangia!',
-    'Ho visto africani denutriti mangiare più di te!',
-    'Mi fai pena, mangia!!!.',
-    'Niente calorie, niente PR. Svegliati coglione e vai a mangiare.'
+    'Sotto il minimo: i muscoli non crescono ad aria 💨',
+    'Il bilanciere non si solleva da solo. Mangia, campione.',
+    'La massa si costruisce a tavola, e oggi hai saltato il cantiere.',
+    'Niente calorie, niente PR. Domani si mangia sul serio.'
   ]
 };
 
@@ -853,6 +853,12 @@ function openPicker(meal){
       b.onclick=()=>{ close(); openScanner((nf)=>{ openQty(meal, nf.id, null); }); };
       return b;
     }
+    function makeSearchBtn(){
+      const b=document.createElement('button');
+      b.className='newfood'; b.style.marginTop='8px'; b.textContent='🔍 Cerca nel database';
+      b.onclick=()=>{ close(); openOnlineSearch((nf)=>{ openQty(meal, nf.id, null); }); };
+      return b;
+    }
 
     function draw(filter){
       recWrap.innerHTML=''; listWrap.innerHTML='';
@@ -885,6 +891,7 @@ function openPicker(meal){
       if(!foods.length){
         listWrap.innerHTML='<div class="empty">Nessun alimento trovato</div>';
         listWrap.appendChild(makeNewBtn());
+        listWrap.appendChild(makeSearchBtn());
         listWrap.appendChild(makeScanBtn());
         return;
       }
@@ -899,6 +906,7 @@ function openPicker(meal){
         listWrap.appendChild(row);
       });
       listWrap.appendChild(makeNewBtn());
+      listWrap.appendChild(makeSearchBtn());
       listWrap.appendChild(makeScanBtn());
     }
     input.oninput=()=>draw(input.value);
@@ -910,7 +918,7 @@ function openPicker(meal){
 function openQty(meal, foodId, editIdx){
   const f=foodById(foodId); if(!f) return;
   const isEdit = editIdx!==null && editIdx!==undefined;
-  const remembered = state.lastAmounts[foodId];
+  const remembered = state.lastAmounts[meal+'|'+foodId] !== undefined ? state.lastAmounts[meal+'|'+foodId] : state.lastAmounts[foodId];
   let amount = isEdit ? mealItems(meal)[editIdx].amount : (remembered || (f.unit==='g' ? 100 : 1));
   openSheet((panel,close)=>{
     const body=head(panel, isEdit?'Modifica':'Aggiungi', close);
@@ -959,6 +967,7 @@ function openQty(meal, foodId, editIdx){
       const d=dayData(); if(!d[meal]) d[meal]=[];
       if(isEdit){ d[meal][editIdx].amount=amount; }
       else { d[meal].push({foodId, amount}); pushRecent(foodId); }
+      state.lastAmounts[meal+'|'+foodId]=amount;
       state.lastAmounts[foodId]=amount;
       save(); render(); close();
       const after=totalsFor(state.date);
@@ -1027,6 +1036,20 @@ function openFoodForm(existing, onSaved, draft){
 }
 
 /* ---------- scanner barcode + Open Food Facts ---------- */
+function draftFromOFF(p){
+  const n=p.nutriments||{};
+  let kcal=n['energy-kcal_100g'];
+  if(kcal==null && n['energy_100g']!=null) kcal=n['energy_100g']/4.184;
+  const round2=(x)=> (x==null || isNaN(x)) ? '' : Math.round(x*100)/100;
+  return {
+    name:(p.product_name_it||p.product_name||'').toLowerCase().trim(),
+    prot:round2(n['proteins_100g']),
+    carb:round2(n['carbohydrates_100g']),
+    fat:round2(n['fat_100g']),
+    kcal:round2(kcal)
+  };
+}
+
 let zxingPromise=null;
 function loadZXing(){
   if(window.ZXing) return Promise.resolve();
@@ -1084,17 +1107,7 @@ function openScanner(onFood){
         const r=await fetch('https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=product_name,product_name_it,brands,nutriments');
         const j=await r.json();
         if(j.status!==1 || !j.product){ fail('Prodotto non trovato nel database 😕', true); return; }
-        const p=j.product, n=p.nutriments||{};
-        let kcal=n['energy-kcal_100g'];
-        if(kcal==null && n['energy_100g']!=null) kcal=n['energy_100g']/4.184;
-        const round2=(x)=> (x==null || isNaN(x)) ? '' : Math.round(x*100)/100;
-        const draft={
-          name:(p.product_name_it||p.product_name||'').toLowerCase().trim(),
-          prot:round2(n['proteins_100g']),
-          carb:round2(n['carbohydrates_100g']),
-          fat:round2(n['fat_100g']),
-          kcal:round2(kcal)
-        };
+        const draft=draftFromOFF(j.product);
         stopAll(); close();
         openFoodForm(null, onFood, draft);
       }catch(e){
@@ -1163,6 +1176,58 @@ function openScanner(onFood){
   });
 }
 
+/* ---------- ricerca nel database Open Food Facts ---------- */
+function openOnlineSearch(onFood){
+  openSheet((panel,close)=>{
+    const body=head(panel, 'Cerca nel database', close);
+    const search=document.createElement('div'); search.className='search';
+    search.innerHTML=`<span class="mg">⌕</span><input type="text" placeholder="es. yogurt greco, bresaola…" autocomplete="off">`;
+    body.appendChild(search);
+    const input=search.querySelector('input');
+    const status=document.createElement('div'); status.className='scan-status';
+    status.textContent='Scrivi il nome di un prodotto';
+    body.appendChild(status);
+    const list=document.createElement('div'); body.appendChild(list);
+    let timer=null, ctrl=null;
+
+    async function run(q){
+      if(ctrl) ctrl.abort();
+      ctrl=new AbortController();
+      status.textContent='Cerco…'; list.innerHTML='';
+      try{
+        const url='https://it.openfoodfacts.org/cgi/search.pl?search_simple=1&action=process&json=1&page_size=12'
+          +'&fields=product_name,product_name_it,brands,nutriments'
+          +'&search_terms='+encodeURIComponent(q);
+        const r=await fetch(url,{signal:ctrl.signal});
+        const j=await r.json();
+        const prods=(j.products||[]).filter(p=>p.product_name_it||p.product_name);
+        if(!prods.length){ status.textContent='Nessun risultato per "'+q+'"'; return; }
+        status.textContent='Tocca un prodotto per aggiungerlo';
+        prods.forEach(p=>{
+          const d=draftFromOFF(p);
+          const row=document.createElement('div'); row.className='frow';
+          const brand=p.brands ? ' · '+String(p.brands).split(',')[0].trim() : '';
+          const meta=(d.prot!==''?`<b>${d.prot}g P</b>`:'&mdash;')
+            +(d.kcal!==''?` · ${d.kcal} kcal`:'')+' / 100g'+brand;
+          row.innerHTML=`<div class="fi"><div class="fn">${d.name||'(senza nome)'}</div><div class="fmeta">${meta}</div></div><button class="plus pressable">+</button>`;
+          row.querySelector('.plus').onclick=()=>{ close(); openFoodForm(null, onFood, d); };
+          list.appendChild(row);
+        });
+      }catch(e){
+        if(e.name!=='AbortError') status.textContent='Errore di rete: serve connessione';
+      }
+    }
+
+    input.oninput=()=>{
+      clearTimeout(timer);
+      const q=input.value.trim();
+      if(q.length<3){ status.textContent='Scrivi almeno 3 lettere'; list.innerHTML=''; return; }
+      timer=setTimeout(()=>run(q), 500);
+    };
+    setTimeout(()=>{ try{input.focus();}catch(e){} }, 350);
+  });
+}
+
 /* ---------- gestione alimenti ---------- */
 function openFoodsManager(){
   openSheet((panel,close)=>{
@@ -1173,6 +1238,9 @@ function openFoodsManager(){
     const scan=document.createElement('button'); scan.className='newfood'; scan.style.marginBottom='6px';
     scan.textContent='📷 Scansiona codice a barre'; scan.onclick=()=>{ close(); openScanner(()=>openFoodsManager()); };
     body.appendChild(scan);
+    const srch=document.createElement('button'); srch.className='newfood'; srch.style.marginBottom='6px';
+    srch.textContent='🔍 Cerca nel database'; srch.onclick=()=>{ close(); openOnlineSearch(()=>openFoodsManager()); };
+    body.appendChild(srch);
     const list=document.createElement('div');
     state.foods.slice().sort((a,b)=>a.name.localeCompare(b.name,'it')).forEach(f=>{
       const row=document.createElement('div'); row.className='fm-row';
@@ -1215,6 +1283,7 @@ function openSettings(){
       <div class="settings-row" id="rFoods"><div class="lbl">Gestisci alimenti<small>aggiungi, modifica, elimina</small></div><span style="color:var(--ink-faint);font-size:20px">›</span></div>
       <div class="field" style="margin-top:18px"><label>Frasi del coach quando sfori il massimo (una per riga)</label><textarea id="sMsgO" rows="4">${(state.settings.msgsOver||[]).join('\n')}</textarea></div>
       <div class="field"><label>Frasi del coach quando resti sotto il minimo (una per riga)</label><textarea id="sMsgU" rows="4">${(state.settings.msgsUnder||[]).join('\n')}</textarea></div>
+      <button class="btn-ghost pressable" id="sResetMsgs">Ripristina frasi predefinite</button>
       <div style="margin-top:16px">
         <button class="btn-ghost pressable" id="sExport">Esporta dati (backup)</button>
         <button class="btn-ghost pressable" id="sImport">Importa dati da file</button>
@@ -1233,6 +1302,11 @@ function openSettings(){
     const mo=body.querySelector('#sMsgO'), mu=body.querySelector('#sMsgU');
     mo.onchange=()=>{ state.settings.msgsOver=parseMsgs(mo.value); save(); renderHero(); };
     mu.onchange=()=>{ state.settings.msgsUnder=parseMsgs(mu.value); save(); renderHero(); };
+    body.querySelector('#sResetMsgs').onclick=()=>{
+      state.settings.msgsOver=DEF_SETTINGS.msgsOver.slice();
+      state.settings.msgsUnder=DEF_SETTINGS.msgsUnder.slice();
+      save(); renderHero(); close(); openSettings(); toast('Frasi ripristinate');
+    };
     const themeSeg=body.querySelectorAll('#sTheme button');
     themeSeg.forEach(b=>{
       if(b.dataset.t===(state.settings.theme||'auto')) b.classList.add('on');
